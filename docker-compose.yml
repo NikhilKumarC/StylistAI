@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: stylistai_postgres
+    environment:
+      POSTGRES_DB: stylistai
+      POSTGRES_USER: stylistai_user
+      POSTGRES_PASSWORD: stylistai_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stylistai_user -d stylistai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stylistai_network
+
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: stylistai_chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stylistai_network
+
+  # FastAPI Application (optional - for full containerized dev)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stylistai_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    environment:
+      - DATABASE_URL=postgresql://stylistai_user:stylistai_password@postgres:5432/stylistai
+      - CHROMA_HOST=http://chromadb:8000
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_healthy
+    networks:
+      - stylistai_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+  chroma_data:
+
+networks:
+  stylistai_network:
+    driver: bridge

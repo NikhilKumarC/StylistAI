@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StylistAI - Your Personal Fashion Assistant</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #ec4899;
+            --accent: #f59e0b;
+            --success: #10b981;
+            --bg-dark: #0f172a;
+            --bg-light: #1e293b;
+            --text-light: #f1f5f9;
+            --text-gray: #94a3b8;
+            --border: #334155;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-light);
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.5;
+        }
+
+        .bg-animation::before {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+            top: -200px;
+            right: -200px;
+            animation: float 20s infinite;
+        }
+
+        .bg-animation::after {
+            content: '';
+            position: absolute;
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, var(--secondary) 0%, transparent 70%);
+            bottom: -150px;
+            left: -150px;
+            animation: float 15s infinite reverse;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(30px, -50px) rotate(120deg); }
+            66% { transform: translate(-20px, 20px) rotate(240deg); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .logo-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+        }
+
+        .header h1 {
+            font-size: 48px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: var(--text-gray);
+            font-size: 18px;
+            margin-top: 10px;
+        }
+
+        /* Auth Screen */
+        .auth-container {
+            max-width: 450px;
+            margin: 0 auto;
+            background: var(--bg-light);
+            border-radius: 24px;
+            padding: 50px 40px;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            background: var(--bg-dark);
+            padding: 6px;
+            border-radius: 12px;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-gray);
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .auth-tab.active {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+            color: var(--text-light);
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 14px 18px;
+            background: var(--bg-dark);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-light);
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+        }
+
+        .btn:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-dark);
+            border: 2px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* Onboarding Screen */
+        .onboarding-container {
+            max-width: 800px;
+            margin: 0 auto;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .progress-bar {
+            margin-bottom: 40px;
+            background: var(--bg-light);
+            border-radius: 12px;
+            padding: 30px;
+            border: 1px solid var(--border);
+        }
+
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .progress-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+        }
+
+        .progress-step::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            right: -50%;
+            height: 2px;
+            background: var(--border);
+            z-index: 0;
+        }
+
+        .progress-step:last-child::before {
+            display: none;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--bg-dark);
+            border: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            position: relative;
+            z-index: 1;
+            font-weight: 700;
+            transition: all 0.3s;
+        }
+
+        .progress-step.active .step-circle {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-color: transparent;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.5);
+        }
+
+        .progress-step.completed .step-circle {
+            background: var(--success);
+            border-color: transparent;
+        }
+
+        .step-label {
+            font-size: 12px;
+            color: var(--text-gray);
+            font-weight: 500;
+        }
+
+        .progress-step.active .step-label {
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        .progress-fill {
+            height: 8px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 8px;
+            transition: width 0.5s ease;
+        }
+
+        /* Chat Interface */
+        .chat-container {
+            background: var(--bg-light);
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .chat-messages {
+            min-height: 300px;
+            max-height: 500px;
+            overflow-y: auto;
+            margin-bottom: 30px;
+            padding-right: 10px;
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            animation: slideIn 0.4s ease-out;
+        }
+
+        .message.ai {
+            text-align: left;
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message-bubble {
+            display: inline-block;
+            max-width: 80%;
+            padding: 16px 20px;
+            border-radius: 18px;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .message.ai .message-bubble {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.user .message-bubble {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-bottom-right-radius: 4px;
+        }
+
+        .message-sender {
+            font-size: 12px;
+            color: var(--text-gray);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        /* Image Upload */
+        .image-upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 20px 0;
+            background: var(--bg-dark);
+        }
+
+        .image-upload-area:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .image-upload-area.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.7;
+        }
+
+        .upload-text {
+            color: var(--text-gray);
+            font-size: 14px;
+        }
+
+        .upload-text strong {
+            color: var(--primary);
+        }
+
+        .image-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .preview-item {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 1;
+            background: var(--bg-dark);
+            border: 2px solid var(--border);
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-remove {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 28px;
+            height: 28px;
+            background: rgba(239, 68, 68, 0.9);
+            border: none;
+            border-radius: 50%;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .preview-remove:hover {
+            background: rgb(220, 38, 38);
+            transform: scale(1.1);
+        }
+
+        /* Input Area */
+        .input-area {
+            display: flex;
+            gap: 12px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 14px 20px;
+            background: var(--bg-dark);
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            color: var(--text-light);
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .input-area input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+
+        .btn-send {
+            padding: 14px 28px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-send:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .quick-action {
+            padding: 10px 18px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text-light);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .quick-action:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            transform: translateY(-2px);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Utilities */
+        .hidden {
+            display: none !important;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .mt-20 {
+            margin-top: 20px;
+        }
+
+        .error-message {
+            padding: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            color: #f87171;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+
+        .success-message {
+            padding: 12px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 8px;
+            color: #34d399;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* User Info */
+        .user-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: var(--bg-light);
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .btn-logout {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-gray);
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-logout:hover {
+            border-color: #ef4444;
+            color: #f87171;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo">
+                <div class="logo-icon">✨</div>
+            </div>
+            <h1>StylistAI</h1>
+            <p>Your Personal AI Fashion Assistant</p>
+        </div>
+
+        <!-- User Info (hidden initially) -->
+        <div id="userInfo" class="user-info hidden">
+            <div class="user-avatar" id="userAvatar">U</div>
+            <span id="userEmail"></span>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
+
+        <!-- Auth Screen -->
+        <div id="authScreen" class="auth-container">
+            <div class="auth-tabs">
+                <button class="auth-tab active" onclick="switchTab('login')">Login</button>
+                <button class="auth-tab" onclick="switchTab('signup')">Sign Up</button>
+            </div>
+
+            <form id="authForm" onsubmit="handleAuth(event)">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="email" required placeholder="you@example.com">
+                </div>
+
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="password" required placeholder="••••••••">
+                </div>
+
+                <button type="submit" class="btn" id="authButton">
+                    <span id="authButtonText">Login</span>
+                </button>
+
+                <div id="authError" class="error-message hidden"></div>
+            </form>
+        </div>
+
+        <!-- Onboarding Screen -->
+        <div id="onboardingScreen" class="onboarding-container hidden">
+            <div class="progress-bar">
+                <div class="progress-steps">
+                    <div class="progress-step active">
+                        <div class="step-circle">1</div>
+                        <div class="step-label">Style</div>
+                    </div>
+                    <div class="progress-step">
+                        <div class="step-circle">2</div>
+                        <div class="step-label">Preferences</div>
+                    </div>
+                    <div class="progress-step">
+                        <div class="step-circle">3</div>
+                        <div class="step-label">Wardrobe</div>
+                    </div>
+                </div>
+                <div style="background: var(--bg-dark); height: 8px; border-radius: 8px; overflow: hidden;">
+                    <div class="progress-fill" id="progressFill" style="width: 33%;"></div>
+                </div>
+            </div>
+
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages"></div>
+
+                <div id="imageUploadSection" class="hidden">
+                    <div class="image-upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                        <div class="upload-icon">📸</div>
+                        <div class="upload-text">
+                            <strong>Click to upload</strong> or drag and drop<br>
+                            Upload 3-5 photos of your wardrobe (Max 10MB each)
+                        </div>
+                    </div>
+                    <input type="file" id="fileInput" multiple accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+                    <div class="image-preview" id="imagePreview"></div>
+                    <button class="btn-send" id="uploadButton" onclick="uploadImages()" style="display: none; margin-top: 16px; width: 100%;">Upload Photos 📸</button>
+                </div>
+
+                <div class="input-area">
+                    <input type="text" id="userInput" placeholder="Type your answer..." onkeypress="handleKeyPress(event)">
+                    <button class="btn-send" onclick="sendMessage()">Send ✈️</button>
+                </div>
+
+                <div class="quick-actions" id="quickActions"></div>
+            </div>
+        </div>
+
+        <!-- Main Chat Screen -->
+        <div id="chatScreen" class="onboarding-container hidden">
+            <div class="chat-container">
+                <div class="chat-messages" id="mainChatMessages"></div>
+
+                <div class="input-area">
+                    <input type="text" id="mainChatInput" placeholder="Ask me anything about fashion..." onkeypress="handleMainChatKeyPress(event)">
+                    <button class="btn-send" onclick="sendMainChatMessage()">Send ✈️</button>
+                </div>
+
+                <div class="quick-actions">
+                    <div class="quick-action" onclick="quickPrompt('What should I wear today?')">What should I wear today?</div>
+                    <div class="quick-action" onclick="quickPrompt('Suggest a business casual outfit')">Business casual outfit</div>
+                    <div class="quick-action" onclick="quickPrompt('Weekend casual look')">Weekend casual</div>
+                    <div class="quick-action" onclick="quickPrompt('Date night outfit ideas')">Date night outfit</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <script>
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyD3MNmvWbokkuB180gkGrxxQReZx_8_uHc",
+            authDomain: "stylistai-db968.firebaseapp.com",
+            projectId: "stylistai-db968"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+
+        // State
+        let currentUser = null;
+        let authToken = null;
+        let currentAuthMode = 'login';
+        let uploadedFiles = [];
+        let onboardingInProgress = false;
+
+        // Check auth state on page load
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                authToken = await user.getIdToken();
+                showUserInfo(user);
+                await checkOnboardingStatus();
+
+                // Refresh token every 50 minutes (tokens expire after 1 hour)
+                setInterval(async () => {
+                    if (currentUser) {
+                        authToken = await currentUser.getIdToken(true); // Force refresh
+                        console.log('Token refreshed');
+                    }
+                }, 50 * 60 * 1000);
+            } else {
+                showAuthScreen();
+            }
+        });
+
+        // Auth functions
+        function switchTab(mode) {
+            currentAuthMode = mode;
+            const tabs = document.querySelectorAll('.auth-tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.getElementById('authButtonText').textContent = mode === 'login' ? 'Login' : 'Sign Up';
+        }
+
+        async function handleAuth(event) {
+            event.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const authButton = document.getElementById('authButton');
+            const errorDiv = document.getElementById('authError');
+
+            authButton.disabled = true;
+            authButton.innerHTML = '<span class="loading"></span>';
+            errorDiv.classList.add('hidden');
+
+            try {
+                if (currentAuthMode === 'login') {
+                    await auth.signInWithEmailAndPassword(email, password);
+                } else {
+                    await auth.createUserWithEmailAndPassword(email, password);
+                }
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.classList.remove('hidden');
+                authButton.disabled = false;
+                authButton.innerHTML = '<span id="authButtonText">' + (currentAuthMode === 'login' ? 'Login' : 'Sign Up') + '</span>';
+            }
+        }
+
+        function showUserInfo(user) {
+            document.getElementById('userEmail').textContent = user.email;
+            document.getElementById('userAvatar').textContent = user.email[0].toUpperCase();
+            document.getElementById('userInfo').classList.remove('hidden');
+        }
+
+        async function logout() {
+            await auth.signOut();
+            location.reload();
+        }
+
+        function showAuthScreen() {
+            document.getElementById('authScreen').classList.remove('hidden');
+            document.getElementById('onboardingScreen').classList.add('hidden');
+            document.getElementById('chatScreen').classList.add('hidden');
+            document.getElementById('userInfo').classList.add('hidden');
+        }
+
+        async function checkOnboardingStatus() {
+            try {
+                const response = await fetch('/onboarding/status', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.completed) {
+                    showMainChat();
+                } else {
+                    startOnboarding();
+                }
+            } catch (error) {
+                console.error('Error checking onboarding:', error);
+                startOnboarding();
+            }
+        }
+
+        async function startOnboarding() {
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('onboardingScreen').classList.remove('hidden');
+            onboardingInProgress = true;
+
+            try {
+                const response = await fetch('/onboarding/start', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Onboarding error:', errorData);
+                    addAIMessage(`Sorry, there was an authentication error: ${errorData.detail || 'Please try logging out and back in.'}`);
+                    return;
+                }
+
+                const data = await response.json();
+                if (data.next_question) {
+                    addAIMessage(data.next_question);
+                } else {
+                    console.error('No next_question in response:', data);
+                    addAIMessage('Sorry, there was an error starting the onboarding. Please refresh the page and try again.');
+                }
+            } catch (error) {
+                console.error('Error starting onboarding:', error);
+                addAIMessage('Sorry, there was a connection error. Please check your internet connection and try again.');
+            }
+        }
+
+        function addAIMessage(text) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ai';
+            messageDiv.innerHTML = `
+                <div class="message-sender">✨ StylistAI</div>
+                <div class="message-bubble">${text}</div>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addUserMessage(text) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user';
+            messageDiv.innerHTML = `
+                <div class="message-sender">You</div>
+                <div class="message-bubble">${text}</div>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            addUserMessage(message);
+            input.value = '';
+
+            try {
+                const response = await fetch('/onboarding/respond', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Response error:', errorData);
+                    addAIMessage(`Sorry, there was an error: ${errorData.detail || 'Please try again.'}`);
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.is_complete) {
+                    addAIMessage(data.next_question || 'Thank you! Your onboarding is complete.');
+                    setTimeout(() => showMainChat(), 2000);
+                } else {
+                    addAIMessage(data.next_question || 'Continue...');
+
+                    // Show image upload if asking for photos
+                    if (data.current_step === 'photos') {
+                        document.getElementById('imageUploadSection').classList.remove('hidden');
+                    }
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                addAIMessage('Sorry, there was an error. Please try again.');
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Image Upload
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            uploadedFiles = uploadedFiles.concat(files);
+            displayImagePreviews();
+        }
+
+        function displayImagePreviews() {
+            const previewDiv = document.getElementById('imagePreview');
+            const uploadButton = document.getElementById('uploadButton');
+            previewDiv.innerHTML = '';
+
+            uploadedFiles.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const item = document.createElement('div');
+                    item.className = 'preview-item';
+                    item.innerHTML = `
+                        <img src="${e.target.result}" alt="Preview">
+                        <button class="preview-remove" onclick="removeImage(${index})">×</button>
+                    `;
+                    previewDiv.appendChild(item);
+                };
+                reader.readAsDataURL(file);
+            });
+
+            // Show/hide upload button based on files
+            if (uploadedFiles.length > 0) {
+                uploadButton.style.display = 'block';
+            } else {
+                uploadButton.style.display = 'none';
+            }
+        }
+
+        function removeImage(index) {
+            uploadedFiles.splice(index, 1);
+            displayImagePreviews();
+        }
+
+        async function uploadImages() {
+            if (uploadedFiles.length === 0) {
+                alert('Please upload at least one image');
+                return;
+            }
+
+            const formData = new FormData();
+            uploadedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+
+            try {
+                const response = await fetch('/onboarding/upload-photos', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+                addAIMessage(`Great! I've processed ${data.successful} photos. ${data.message}`);
+
+                document.getElementById('imageUploadSection').classList.add('hidden');
+                uploadedFiles = [];
+            } catch (error) {
+                console.error('Error uploading images:', error);
+                addAIMessage('Sorry, there was an error uploading your images. Please try again.');
+            }
+        }
+
+        // Drag and drop
+        const uploadArea = document.getElementById('uploadArea');
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => {
+                uploadArea.classList.remove('dragover');
+            }, false);
+        });
+
+        uploadArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = Array.from(dt.files);
+            uploadedFiles = uploadedFiles.concat(files);
+            displayImagePreviews();
+        }
+
+        // Main Chat
+        function showMainChat() {
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('onboardingScreen').classList.add('hidden');
+            document.getElementById('chatScreen').classList.remove('hidden');
+
+            const mainChatMessages = document.getElementById('mainChatMessages');
+            mainChatMessages.innerHTML = `
+                <div class="message ai">
+                    <div class="message-sender">✨ StylistAI</div>
+                    <div class="message-bubble">Welcome! I'm ready to help with your style. What would you like to know?</div>
+                </div>
+            `;
+        }
+
+        async function sendMainChatMessage() {
+            const input = document.getElementById('mainChatInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            addMainChatUserMessage(message);
+            input.value = '';
+
+            // Show loading message
+            addMainChatAIMessage('Thinking...');
+
+            try {
+                const response = await fetch('/styling/query', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query: message })
+                });
+
+                const data = await response.json();
+
+                // Remove loading message
+                const messagesDiv = document.getElementById('mainChatMessages');
+                messagesDiv.removeChild(messagesDiv.lastChild);
+
+                // Format the response
+                let formattedResponse = '';
+
+                // CONVERSATIONAL MODE - Display AI's natural response
+                if (data.response) {
+                    formattedResponse = data.response;
+
+                    // If there are also recommendations, add them
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        formattedResponse += `\n\n**Here are specific outfit ideas:**\n\n`;
+
+                        data.recommendations.forEach((rec, index) => {
+                            formattedResponse += `**${index + 1}. ${rec.title}**\n`;
+                            formattedResponse += `${rec.description}\n`;
+                            if (rec.styling_tip) {
+                                formattedResponse += `💡 *${rec.styling_tip}*\n`;
+                            }
+                            if (rec.trend_note) {
+                                formattedResponse += `✨ *${rec.trend_note}*\n`;
+                            }
+                            formattedResponse += `\n`;
+                        });
+                    }
+                }
+                // OLD MODE - Fallback for non-conversational responses
+                else if (data.personalization_note || (data.recommendations && data.recommendations.length > 0)) {
+                    if (data.personalization_note) {
+                        formattedResponse += `${data.personalization_note}\n\n`;
+                    }
+
+                    if (data.recommendations && data.recommendations.length > 0) {
+                        formattedResponse += `Here are my recommendations:\n\n`;
+
+                        data.recommendations.forEach((rec, index) => {
+                            formattedResponse += `${index + 1}. **${rec.title}**\n`;
+                            formattedResponse += `   ${rec.description}\n`;
+                            if (rec.confidence_score) {
+                                formattedResponse += `   Confidence: ${(rec.confidence_score * 100).toFixed(0)}%\n`;
+                            }
+                            formattedResponse += `\n`;
+                        });
+                    }
+                } else {
+                    formattedResponse = 'I have received your query and analyzed your preferences. Let me know if you need more specific recommendations!';
+                }
+
+                addMainChatAIMessage(formattedResponse);
+            } catch (error) {
+                console.error('Error:', error);
+                // Remove loading message
+                const messagesDiv = document.getElementById('mainChatMessages');
+                if (messagesDiv.lastChild && messagesDiv.lastChild.textContent.includes('Thinking')) {
+                    messagesDiv.removeChild(messagesDiv.lastChild);
+                }
+                addMainChatAIMessage('Sorry, I encountered an error. Please try again.');
+            }
+        }
+
+        function addMainChatUserMessage(text) {
+            const messagesDiv = document.getElementById('mainChatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user';
+            messageDiv.innerHTML = `
+                <div class="message-sender">You</div>
+                <div class="message-bubble">${text}</div>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function addMainChatAIMessage(text) {
+            const messagesDiv = document.getElementById('mainChatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ai';
+
+            // Format text: convert \n to <br> and **text** to <strong>
+            let formattedText = text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+
+            messageDiv.innerHTML = `
+                <div class="message-sender">✨ StylistAI</div>
+                <div class="message-bubble">${formattedText}</div>
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function handleMainChatKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMainChatMessage();
+            }
+        }
+
+        function quickPrompt(text) {
+            document.getElementById('mainChatInput').value = text;
+            sendMainChatMessage();
+        }
+    </script>
+</body>
+</html>
