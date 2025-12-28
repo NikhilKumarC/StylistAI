@@ -12,7 +12,7 @@ from app.models.styling import (
     TrendInsight
 )
 from app.core.dependencies import get_current_user
-from app.services.conversational_stylist import get_conversational_stylist
+from app.services.conversational_stylist_autonomous import chat_with_stylist
 from app.services.langgraph_agent import run_styling_agent
 from app.services.user_service import UserService
 from app.services.image_service import ImageService
@@ -32,26 +32,32 @@ async def get_styling_advice(
     current_user: dict = Depends(get_current_user)
 ):
     """
+    🆕 Now uses AUTONOMOUS AGENT with Pure Sequential Pattern! (Updated)
+
     Have a natural conversation with your AI stylist
 
-    This endpoint creates a friendly, conversational experience where the AI:
-    1. Chats naturally like a real stylist
-    2. Asks follow-up questions to understand your needs
-    3. Builds context organically through conversation
-    4. Gives recommendations when ready (not immediately)
+    This endpoint uses the autonomous multi-agent architecture where:
+    1. Agent 2 (Conversational) gathers context through natural dialogue
+    2. API detects when context is complete (weather + readiness + depth)
+    3. Agent 3 (LangGraph) generates recommendations with intelligent tool selection
 
-    The AI will make you feel comfortable and understood before suggesting outfits!
+    Benefits of the autonomous system:
+    - Truly autonomous tool selection (0-3 tools as needed)
+    - Climate-aware recommendations
+    - More efficient (only calls needed tools)
+    - Better conversation flow
+    - Proper multi-agent orchestration
 
     Args:
         request: Your message to the stylist
         current_user: Authenticated user
 
     Returns:
-        Conversational response from your AI stylist
+        Conversational response with recommendations when context is complete
     """
     try:
         user_id = current_user["uid"]
-        logger.info(f"Conversational styling query from user {user_id}: {request.query}")
+        logger.info(f"[Autonomous] Styling query from user {user_id}: {request.query}")
 
         # Get conversation history for this user
         if user_id not in _conversation_histories:
@@ -62,69 +68,198 @@ async def get_styling_advice(
         # Get user preferences
         user_prefs = UserService.get_user_preferences(user_id)
 
-        # Get conversational stylist
-        stylist = get_conversational_stylist()
-
-        # Have conversation
-        chat_result = await stylist.chat(
-            user_message=request.query,
+        # STEP 1: Call Conversational Agent (Agent 2) - Pure Sequential Pattern
+        logger.info(f"[Autonomous] Step 1: Calling conversational agent...")
+        chat_result = await chat_with_stylist(
             user_id=user_id,
+            user_message=request.query,
             conversation_history=conversation_history,
             user_preferences=user_prefs
         )
 
         ai_response = chat_result["response"]
+        tools_used = chat_result.get("tools_used", [])
+        weather_info = chat_result.get("weather_info")
+        needs_more_context = chat_result.get("needs_more_context", True)
+
+        logger.info(f"[Autonomous] Conversational agent used tools: {tools_used}")
+        logger.info(f"[Autonomous] Needs more context: {needs_more_context}")
 
         # Save to conversation history
         conversation_history.append({"role": "user", "content": request.query})
         conversation_history.append({"role": "assistant", "content": ai_response})
 
-        # If AI is ready to give recommendations, search wardrobe
         recommendations = []
-        if chat_result.get("should_search_wardrobe"):
-            try:
-                # Search user's wardrobe for relevant items
-                similar_outfits = await ImageService.search_similar_outfits(
-                    query=request.query,
-                    user_id=user_id,
-                    n_results=5
-                )
 
-                # If we found items, enhance the response
-                if similar_outfits:
-                    logger.info(f"Found {len(similar_outfits)} wardrobe items to reference")
+        # STEP 2: PURE SEQUENTIAL PATTERN - Explicit Orchestration
+        # Check if conversational agent gathered complete context
+        if not needs_more_context and weather_info:
+            logger.info(f"[Autonomous] Step 2: Context complete, orchestrating LangGraph agent...")
 
-                    # Run full styling agent for detailed recommendations
-                    agent_result = await run_styling_agent(
-                        user_id=user_id,
-                        query=request.query,
-                        user_preferences=user_prefs
-                    )
+            # Build enriched query with all gathered context
+            enriched_query = request.query
+            if weather_info:
+                enriched_query += f"\n\nWeather context: {weather_info.get('location')} on {weather_info.get('date')} - {weather_info.get('temperature')}, {weather_info.get('conditions')}"
 
-                    # Format recommendations
-                    for rec in agent_result.get('recommendations', []):
-                        recommendations.append({
-                            "title": rec.get('item', 'Outfit Recommendation'),
-                            "description": rec.get('reasoning', ''),
-                            "styling_tip": rec.get('styling_tip', ''),
-                            "trend_note": rec.get('trend_note', ''),
-                            "confidence_score": rec.get('confidence', 0.85)
-                        })
+            # Call LangGraph Agent (Agent 3) directly
+            agent_result = await run_styling_agent(
+                user_id=user_id,
+                query=enriched_query,
+                user_preferences=user_prefs,
+                weather_context=weather_info
+            )
 
-            except Exception as e:
-                logger.warning(f"Error searching wardrobe: {e}")
-                # Continue with conversational response only
+            # Format recommendations
+            for rec in agent_result.get('recommendations', []):
+                recommendations.append({
+                    "title": rec.get('item', 'Outfit Recommendation'),
+                    "description": rec.get('reasoning', ''),
+                    "styling_tip": rec.get('styling_tip', ''),
+                    "trend_note": rec.get('trend_note', ''),
+                    "climate_note": rec.get('climate_note', ''),
+                    "confidence_score": rec.get('confidence', 0.85)
+                })
 
-        # Return conversational response
+            logger.info(f"[Autonomous] Generated {len(recommendations)} recommendations via sequential orchestration")
+
+        # Return response
         return {
             "response": ai_response,
             "recommendations": recommendations,
-            "is_conversational": chat_result.get("needs_more_context", True),
-            "context_complete": not chat_result.get("needs_more_context", True)
+            "is_conversational": needs_more_context,
+            "context_complete": not needs_more_context,
+            "weather_info": weather_info,
+            "tools_used": tools_used,
+            "agent_architecture": "pure_sequential",
+            "orchestration_method": "explicit_api_orchestration"
         }
 
     except Exception as e:
-        logger.error(f"Error in conversational styling: {str(e)}")
+        logger.error(f"[Autonomous] Error in styling conversation: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process conversation: {str(e)}"
+        )
+
+
+@router.post("/query-autonomous")
+async def get_styling_advice_autonomous(
+    request: StylingQueryRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    🆕 AUTONOMOUS MULTI-AGENT STYLING CONVERSATION (Sequential Pattern)
+
+    This endpoint uses the new autonomous agent architecture where:
+    1. Agent 2 (Conversational Stylist) gathers context through natural conversation
+    2. When context is complete, Agent 3 (LangGraph) generates recommendations
+    3. API orchestrates agents explicitly (Sequential Pattern, not tool-wrapper)
+
+    The autonomous agents use LLM tool calling to decide:
+    - When to fetch weather (Agent 2)
+    - When to search wardrobe (Agent 3)
+    - When to search trends (Agent 3)
+    - Which tools are actually needed (0-3 tools, not always all)
+
+    Benefits over /query:
+    - Truly autonomous tool selection
+    - Climate-aware recommendations
+    - More efficient (only calls needed tools)
+    - Better conversation flow
+    - Proper multi-agent orchestration
+
+    Args:
+        request: Your message to the stylist
+        current_user: Authenticated user
+
+    Returns:
+        Conversational response with recommendations when ready
+    """
+    try:
+        user_id = current_user["uid"]
+        logger.info(f"[Autonomous] Styling query from user {user_id}: {request.query}")
+
+        # Get conversation history for this user
+        if user_id not in _conversation_histories:
+            _conversation_histories[user_id] = []
+
+        conversation_history = _conversation_histories[user_id]
+
+        # Get user preferences
+        user_prefs = UserService.get_user_preferences(user_id)
+
+        # STEP 1: Call Conversational Agent (Agent 2) to gather context
+        logger.info(f"[Autonomous] Step 1: Calling conversational agent...")
+        chat_result = await chat_with_stylist(
+            user_id=user_id,
+            user_message=request.query,
+            conversation_history=conversation_history,
+            user_preferences=user_prefs
+        )
+
+        ai_response = chat_result["response"]
+        tools_used = chat_result.get("tools_used", [])
+        weather_info = chat_result.get("weather_info")
+        has_recommendations = chat_result.get("has_recommendations", False)
+        needs_more_context = chat_result.get("needs_more_context", True)
+
+        logger.info(f"[Autonomous] Conversational agent used tools: {tools_used}")
+        logger.info(f"[Autonomous] Has recommendations: {has_recommendations}")
+        logger.info(f"[Autonomous] Needs more context: {needs_more_context}")
+
+        # Save to conversation history
+        conversation_history.append({"role": "user", "content": request.query})
+        conversation_history.append({"role": "assistant", "content": ai_response})
+
+        recommendations = []
+
+        # STEP 2: PURE SEQUENTIAL PATTERN - Explicit Orchestration
+        # Check if conversational agent gathered complete context (weather + readiness)
+        # If so, API explicitly calls LangGraph Agent (Agent 3)
+        if not needs_more_context and weather_info:
+            logger.info(f"[Autonomous] Step 2: Context complete, orchestrating LangGraph agent...")
+
+            # Build enriched query with all gathered context
+            enriched_query = request.query
+            if weather_info:
+                enriched_query += f"\n\nWeather context: {weather_info.get('location')} on {weather_info.get('date')} - {weather_info.get('temperature')}, {weather_info.get('conditions')}"
+
+            # Call LangGraph Agent (Agent 3) directly - TRUE SEQUENTIAL PATTERN
+            agent_result = await run_styling_agent(
+                user_id=user_id,
+                query=enriched_query,
+                user_preferences=user_prefs,
+                weather_context=weather_info
+            )
+
+            # Format recommendations
+            for rec in agent_result.get('recommendations', []):
+                recommendations.append({
+                    "title": rec.get('item', 'Outfit Recommendation'),
+                    "description": rec.get('reasoning', ''),
+                    "styling_tip": rec.get('styling_tip', ''),
+                    "trend_note": rec.get('trend_note', ''),
+                    "climate_note": rec.get('climate_note', ''),
+                    "confidence_score": rec.get('confidence', 0.85)
+                })
+
+            logger.info(f"[Autonomous] Generated {len(recommendations)} recommendations via explicit sequential orchestration")
+
+        # Format response
+        return {
+            "response": ai_response,
+            "recommendations": recommendations,
+            "is_conversational": needs_more_context,
+            "context_complete": not needs_more_context,
+            "weather_info": weather_info,
+            "tools_used": tools_used,
+            "agent_architecture": "pure_sequential",
+            "orchestration_method": "explicit_api_orchestration",
+            "pattern": "Agent 2 (Conversational) → API checks readiness → Agent 3 (LangGraph)"
+        }
+
+    except Exception as e:
+        logger.error(f"[Autonomous] Error in styling conversation: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process conversation: {str(e)}"

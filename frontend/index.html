@@ -737,6 +737,7 @@
                     <input type="file" id="fileInput" multiple accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
                     <div class="image-preview" id="imagePreview"></div>
                     <button class="btn-send" id="uploadButton" onclick="uploadImages()" style="display: none; margin-top: 16px; width: 100%;">Upload Photos 📸</button>
+                    <button class="btn-secondary" onclick="skipPhotoUpload()" style="margin-top: 12px; width: 100%;">Skip for now</button>
                 </div>
 
                 <div class="input-area">
@@ -971,14 +972,18 @@
 
                 if (data.is_complete) {
                     addAIMessage(data.next_question || 'Thank you! Your onboarding is complete.');
-                    setTimeout(() => showMainChat(), 2000);
+
+                    // Check if user wants to upload photos
+                    if (data.photos_requested) {
+                        // Show upload section - wait for photos before going to main chat
+                        document.getElementById('imageUploadSection').classList.remove('hidden');
+                        addAIMessage('👇 Please upload 3-5 photos of your wardrobe below:');
+                    } else {
+                        // No photos needed, go straight to main chat
+                        setTimeout(() => showMainChat(), 2000);
+                    }
                 } else {
                     addAIMessage(data.next_question || 'Continue...');
-
-                    // Show image upload if asking for photos
-                    if (data.current_step === 'photos') {
-                        document.getElementById('imageUploadSection').classList.remove('hidden');
-                    }
                 }
             } catch (error) {
                 console.error('Error sending message:', error);
@@ -995,13 +1000,17 @@
         // Image Upload
         function handleFileSelect(event) {
             const files = Array.from(event.target.files);
+            console.log('Files selected:', files.length);
             uploadedFiles = uploadedFiles.concat(files);
+            console.log('Total uploaded files:', uploadedFiles.length);
             displayImagePreviews();
         }
 
         function displayImagePreviews() {
             const previewDiv = document.getElementById('imagePreview');
             const uploadButton = document.getElementById('uploadButton');
+            console.log('displayImagePreviews called, uploadedFiles.length:', uploadedFiles.length);
+            console.log('Upload button element:', uploadButton);
             previewDiv.innerHTML = '';
 
             uploadedFiles.forEach((file, index) => {
@@ -1020,8 +1029,10 @@
 
             // Show/hide upload button based on files
             if (uploadedFiles.length > 0) {
+                console.log('Showing upload button');
                 uploadButton.style.display = 'block';
             } else {
+                console.log('Hiding upload button');
                 uploadButton.style.display = 'none';
             }
         }
@@ -1032,15 +1043,28 @@
         }
 
         async function uploadImages() {
+            console.log('uploadImages called, uploadedFiles.length:', uploadedFiles.length);
+
             if (uploadedFiles.length === 0) {
                 alert('Please upload at least one image');
                 return;
             }
 
+            if (uploadedFiles.length > 5) {
+                alert('Please upload a maximum of 5 photos');
+                return;
+            }
+
+            const uploadButton = document.getElementById('uploadButton');
+            uploadButton.disabled = true;
+            uploadButton.innerHTML = '<span class="loading"></span> Uploading...';
+
             const formData = new FormData();
             uploadedFiles.forEach(file => {
                 formData.append('files', file);
             });
+
+            console.log('Sending upload request...');
 
             try {
                 const response = await fetch('/onboarding/upload-photos', {
@@ -1051,15 +1075,36 @@
                     body: formData
                 });
 
+                console.log('Upload response status:', response.status);
                 const data = await response.json();
-                addAIMessage(`Great! I've processed ${data.successful} photos. ${data.message}`);
+                console.log('Upload response data:', data);
 
-                document.getElementById('imageUploadSection').classList.add('hidden');
-                uploadedFiles = [];
+                if (response.ok) {
+                    addAIMessage(`Perfect! I've analyzed ${data.successful} photos from your wardrobe. 🎉\n\nNow let's find you some amazing outfits!`);
+
+                    document.getElementById('imageUploadSection').classList.add('hidden');
+                    uploadedFiles = [];
+
+                    // Transition to main chat after photos are uploaded
+                    setTimeout(() => showMainChat(), 2000);
+                } else {
+                    addAIMessage(`Sorry, there was an error uploading your photos: ${data.detail || data.message}`);
+                    uploadButton.disabled = false;
+                    uploadButton.innerHTML = 'Upload Photos 📸';
+                }
             } catch (error) {
                 console.error('Error uploading images:', error);
                 addAIMessage('Sorry, there was an error uploading your images. Please try again.');
+                uploadButton.disabled = false;
+                uploadButton.innerHTML = 'Upload Photos 📸';
             }
+        }
+
+        function skipPhotoUpload() {
+            addAIMessage("No problem! You can always add photos later from your profile. Let's start finding you some amazing outfits! 🎉");
+            document.getElementById('imageUploadSection').classList.add('hidden');
+            uploadedFiles = [];
+            setTimeout(() => showMainChat(), 2000);
         }
 
         // Drag and drop

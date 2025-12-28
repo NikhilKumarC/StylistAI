@@ -8,7 +8,7 @@ from typing import Optional, List
 from pydantic import BaseModel
 from app.models.user import UserResponse
 from app.core.dependencies import get_current_user
-from app.services.onboarding_agent import run_onboarding_agent, save_onboarding_data
+from app.services.onboarding_agent_autonomous import run_autonomous_onboarding, save_autonomous_onboarding_data
 from app.services.user_service import UserService
 import logging
 
@@ -28,6 +28,7 @@ class OnboardingResponse(BaseModel):
     current_step: str
     is_complete: bool
     collected_data: Optional[dict] = None
+    photos_requested: Optional[bool] = False
 
 
 # In-memory storage for onboarding states (replace with Redis/database in production)
@@ -39,21 +40,24 @@ async def start_onboarding(
     current_user: dict = Depends(get_current_user)
 ):
     """
+    🆕 Now uses AUTONOMOUS AGENT! (Updated)
+
     Start the onboarding process for a new user
 
-    This initiates a conversational flow to collect:
-    - Style preferences (minimalist, modern, etc.)
-    - Color preferences
-    - Occasions (work, casual, formal)
-    - Fit preferences
-    - Budget range
-    - Body type
-    - Style goals
-    - Wardrobe photos
+    This initiates a conversational flow using the autonomous agent that:
+    - Feels like chatting with a friendly stylist (NOT a form!)
+    - Adapts questions based on your responses
+    - Handles questions back from you
+    - Accepts when you don't want to share something (stores NULL)
+    - Knows when it has enough information
     """
     try:
         user_id = current_user["uid"]
-        logger.info(f"Starting onboarding for user: {user_id}")
+        user_email = current_user.get("email")
+        logger.info(f"[Autonomous] Starting onboarding for user: {user_id}")
+
+        # Ensure user exists in database
+        UserService.ensure_user_exists(user_id, user_email)
 
         # Check if user has already completed onboarding
         user_prefs = UserService.get_user_preferences(user_id)
@@ -65,25 +69,44 @@ async def start_onboarding(
                 collected_data=user_prefs
             )
 
-        # Run onboarding agent
-        result = await run_onboarding_agent(
+        # Get conversation history
+        if user_id not in _autonomous_conversations:
+            _autonomous_conversations[user_id] = []
+
+        # Use AUTONOMOUS AGENT
+        result = await run_autonomous_onboarding(
             user_id=user_id,
             user_message=None,
-            current_state=None
+            conversation_history=_autonomous_conversations[user_id]
         )
 
-        # Store state
-        _onboarding_states[user_id] = result
+        ai_response = result["response"]
+        is_complete = result.get("is_complete", False)
+
+        # Save to conversation history
+        _autonomous_conversations[user_id].append({"role": "assistant", "content": ai_response})
+
+        # Store state for backward compatibility
+        _onboarding_states[user_id] = {
+            "next_question": ai_response,
+            "current_step": "autonomous",
+            "is_complete": is_complete,
+            "collected_data": result.get("collected_data", {})
+        }
+
+        # Check if user wants to upload photos
+        photos_requested = result.get("collected_data", {}).get("photos_requested", False) if is_complete else False
 
         return OnboardingResponse(
-            next_question=result["next_question"],
-            current_step=result["current_step"],
-            is_complete=result["is_complete"],
-            collected_data=result["collected_data"] if result["is_complete"] else None
+            next_question=ai_response,
+            current_step="autonomous",
+            is_complete=is_complete,
+            collected_data=result.get("collected_data", {}) if is_complete else None,
+            photos_requested=photos_requested
         )
 
     except Exception as e:
-        logger.error(f"Error starting onboarding: {str(e)}")
+        logger.error(f"[Autonomous] Error starting onboarding: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to start onboarding: {str(e)}"
@@ -96,24 +119,31 @@ async def respond_to_onboarding(
     current_user: dict = Depends(get_current_user)
 ):
     """
+    🆕 Now uses AUTONOMOUS AGENT! (Updated)
+
     Respond to onboarding question
 
-    Send your answer to the current onboarding question.
-    The agent will process your response and ask the next question.
+    The autonomous agent will:
+    - Answer questions you ask back
+    - Handle vague or irrelevant answers
+    - Extract multiple pieces of info from one answer
+    - Know when onboarding is complete
     """
     try:
         user_id = current_user["uid"]
-        logger.info(f"Processing onboarding response from user: {user_id}")
+        logger.info(f"[Autonomous] Processing response from user: {user_id}")
 
-        # Get current state
-        current_state = _onboarding_states.get(user_id)
-        if not current_state:
+        # Get conversation history
+        if user_id not in _autonomous_conversations:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No active onboarding session. Please start onboarding first."
             )
 
+        conversation_history = _autonomous_conversations[user_id]
+
         # Check if already complete
+        current_state = _onboarding_states.get(user_id, {})
         if current_state.get("is_complete"):
             return OnboardingResponse(
                 next_question="Onboarding is already complete! You can start chatting.",
@@ -122,34 +152,54 @@ async def respond_to_onboarding(
                 collected_data=current_state["collected_data"]
             )
 
-        # Run onboarding agent with user's response
-        result = await run_onboarding_agent(
+        # Use AUTONOMOUS AGENT
+        result = await run_autonomous_onboarding(
             user_id=user_id,
             user_message=message.message,
-            current_state=current_state
+            conversation_history=conversation_history
         )
 
+        ai_response = result["response"]
+        is_complete = result.get("is_complete", False)
+        collected_data = result.get("collected_data", {})
+
+        # Save to conversation history
+        conversation_history.append({"role": "user", "content": message.message})
+        conversation_history.append({"role": "assistant", "content": ai_response})
+
         # Update state
-        _onboarding_states[user_id] = result
+        _onboarding_states[user_id] = {
+            "next_question": ai_response,
+            "current_step": "autonomous",
+            "is_complete": is_complete,
+            "collected_data": collected_data
+        }
 
         # If onboarding is complete, save preferences
-        if result["is_complete"]:
-            preferences = save_onboarding_data(user_id, result["collected_data"])
-            logger.info(f"Onboarding completed for user: {user_id}")
+        if is_complete:
+            preferences = save_autonomous_onboarding_data(user_id, collected_data)
+            logger.info(f"[Autonomous] Onboarding completed for user: {user_id}")
 
-            # Clear state
-            del _onboarding_states[user_id]
+            # Check if user wants to upload photos
+            photos_requested = collected_data.get("photos_requested", False)
+            logger.info(f"[Autonomous] Photos requested: {photos_requested}")
+
+            # Clear conversation history
+            del _autonomous_conversations[user_id]
+            if user_id in _onboarding_states:
+                del _onboarding_states[user_id]
 
             return OnboardingResponse(
-                next_question=result["next_question"],
-                current_step=result["current_step"],
+                next_question=ai_response,
+                current_step="complete",
                 is_complete=True,
-                collected_data=preferences
+                collected_data=preferences,
+                photos_requested=photos_requested
             )
 
         return OnboardingResponse(
-            next_question=result["next_question"],
-            current_step=result["current_step"],
+            next_question=ai_response,
+            current_step="autonomous",
             is_complete=False,
             collected_data=None
         )
@@ -157,7 +207,7 @@ async def respond_to_onboarding(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing onboarding response: {str(e)}")
+        logger.error(f"[Autonomous] Error processing response: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process response: {str(e)}"
@@ -244,6 +294,122 @@ async def skip_onboarding(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to skip onboarding: {str(e)}"
+        )
+
+
+# In-memory storage for autonomous onboarding conversations
+_autonomous_conversations = {}
+
+
+@router.post("/autonomous")
+async def autonomous_onboarding_chat(
+    message: Optional[OnboardingMessage] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    🆕 AUTONOMOUS ONBOARDING (Natural Conversational Flow)
+
+    This endpoint uses the new autonomous onboarding agent that:
+    - Feels like chatting with a friendly stylist (NOT a form!)
+    - Adapts questions based on your responses
+    - Handles questions back from you
+    - Accepts when you don't want to share something (stores NULL)
+    - Extracts multiple pieces of info from one answer
+    - Knows when it has enough information
+
+    Benefits over /start + /respond:
+    - Single endpoint for entire conversation
+    - More natural, less rigid
+    - Handles edge cases gracefully
+    - Better user experience
+
+    Usage:
+    1. First call with message=None to start
+    2. Subsequent calls with your responses
+    3. Agent will tell you when onboarding is complete
+
+    Args:
+        message: Your message (None for first call)
+        current_user: Authenticated user
+
+    Returns:
+        Agent's response and completion status
+    """
+    try:
+        user_id = current_user["uid"]
+        user_email = current_user.get("email")
+
+        # Ensure user exists in database
+        UserService.ensure_user_exists(user_id, user_email)
+
+        # Check if user has already completed onboarding
+        user_prefs = UserService.get_user_preferences(user_id)
+        if user_prefs and user_prefs.get("onboarding_completed"):
+            return {
+                "response": "You've already completed onboarding! Ready to get styling recommendations? Head over to the styling chat!",
+                "is_complete": True,
+                "onboarding_completed": True,
+                "preferences": user_prefs
+            }
+
+        # Get conversation history
+        if user_id not in _autonomous_conversations:
+            _autonomous_conversations[user_id] = []
+
+        conversation_history = _autonomous_conversations[user_id]
+
+        # Run autonomous onboarding agent
+        logger.info(f"[Autonomous Onboarding] User {user_id}: {message.message if message else 'Starting...'}")
+
+        result = await run_autonomous_onboarding(
+            user_id=user_id,
+            user_message=message.message if message else None,
+            conversation_history=conversation_history
+        )
+
+        ai_response = result["response"]
+        is_complete = result.get("is_complete", False)
+        collected_data = result.get("collected_data", {})
+
+        # Save to conversation history
+        if message and message.message:
+            conversation_history.append({"role": "user", "content": message.message})
+        conversation_history.append({"role": "assistant", "content": ai_response})
+
+        # If onboarding is complete, save preferences
+        if is_complete:
+            logger.info(f"[Autonomous Onboarding] Complete for user {user_id}")
+            preferences = save_autonomous_onboarding_data(user_id, collected_data)
+
+            # Check if user wants to upload photos
+            photos_requested = collected_data.get("photos_requested", False)
+            logger.info(f"[Autonomous Onboarding] Photos requested: {photos_requested}")
+
+            # Clear conversation history
+            del _autonomous_conversations[user_id]
+
+            return {
+                "response": ai_response,
+                "is_complete": True,
+                "onboarding_completed": True,
+                "preferences": preferences,
+                "photos_requested": photos_requested,
+                "message": "Onboarding complete! You're all set to get personalized styling advice!"
+            }
+
+        # Still gathering information
+        return {
+            "response": ai_response,
+            "is_complete": False,
+            "onboarding_completed": False,
+            "collected_so_far": collected_data
+        }
+
+    except Exception as e:
+        logger.error(f"[Autonomous Onboarding] Error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process onboarding: {str(e)}"
         )
 
 
