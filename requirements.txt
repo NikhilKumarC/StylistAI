@@ -12,14 +12,14 @@ chromadb==0.4.18
 google-cloud-storage==2.13.0
 
 # AI/ML
-openai==1.3.7
+openai==2.14.0
 pillow==10.1.0
 
 # LangChain and LangGraph (compatible versions)
-langchain==0.3.17
-langgraph==0.2.70
-langchain-openai==0.3.0
-langchain-community==0.3.17
+langchain==0.3.27
+langgraph==0.6.11
+langchain-openai==0.3.35
+langchain-community==0.3.31
 langchain-core==0.3.81
 
 # Embeddings
@@ -29,9 +29,9 @@ torch==2.1.1
 
 # Utilities
 pydantic==2.12.5
-pydantic-settings==2.1.0
+pydantic-settings==2.11.0
 python-dotenv==1.0.0
-httpx==0.25.2
+httpx==0.28.1
 
 # Development
 pytest==7.4.3
