@@ -107,8 +107,10 @@ temp_images/
 # Redis
 dump.rdb
 
-# Model cache
-models/
+# Model cache (ML models, not database models)
+*.pt
+*.ckpt
+*.pth
 .cache/
 transformers_cache/
 
