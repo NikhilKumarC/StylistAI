@@ -5,6 +5,7 @@ Autonomous agent that intelligently decides which tools to use for styling recom
 
 from typing import TypedDict, List, Optional, Annotated
 from operator import add
+from contextvars import ContextVar
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
@@ -12,6 +13,28 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
 from app.config import settings
 import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Context variable to store current user_id for tool access
+_current_user_id: ContextVar[str] = ContextVar('current_user_id', default='unknown')
+
+# Import Datadog LLM Observability decorators
+try:
+    from ddtrace.llmobs.decorators import agent as llm_agent, tool as llm_tool
+    DATADOG_AVAILABLE = True
+except ImportError:
+    DATADOG_AVAILABLE = False
+    # Create no-op decorators if ddtrace not available
+    def llm_agent(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    def llm_tool(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 
 
 # Define the agent state
@@ -25,10 +48,22 @@ class AgentState(TypedDict):
 
 # Tools for the agent
 @tool
-def get_user_preferences(user_id: str) -> dict:
-    """Fetch user's style preferences from the database"""
+def get_user_preferences() -> dict:
+    """
+    Fetch user's style preferences from the database.
+
+    Returns user's preferences including:
+    - occasions, fit_preferences, budget
+    - style_aesthetics, colors
+    - body_type, default_location
+
+    Note: This will automatically fetch the current user's preferences.
+    """
     try:
         from app.services.user_service import UserService
+
+        # Get user_id from context (set by run_styling_agent)
+        user_id = _current_user_id.get()
 
         # Get actual user preferences from database
         prefs = UserService.get_user_preferences(user_id)
@@ -55,10 +90,21 @@ def get_user_preferences(user_id: str) -> dict:
 
 
 @tool
-async def search_outfit_history(user_id: str, query: str, limit: int = 5) -> List[dict]:
-    """Search user's past outfits using vector similarity"""
+async def search_outfit_history(query: str, limit: int = 5) -> List[dict]:
+    """
+    Search user's past outfits using vector similarity.
+
+    Args:
+        query: Description of what to search for (e.g., "blazer", "casual shirt", "interview outfit")
+        limit: Maximum number of results to return (default: 5)
+
+    Note: This will automatically search the current user's wardrobe.
+    """
     try:
         from app.services.image_service import ImageService
+
+        # Get user_id from context (set by run_styling_agent)
+        user_id = _current_user_id.get()
 
         # Use CLIP to search similar outfits
         results = await ImageService.search_similar_outfits(
@@ -250,9 +296,11 @@ Your goal: Provide personalized outfit recommendations based on the user's reque
 {weather_section}
 
 AVAILABLE TOOLS:
-1. get_user_preferences - Fetch user's style preferences (colors, aesthetics, occasions, budget, body type)
-2. search_outfit_history - Search user's wardrobe using vector similarity (finds relevant items they own)
-3. search_fashion_trends - Search current fashion trends (OPTIONAL - GPT-4 already knows trends)
+1. get_user_preferences() - Fetch the user's style preferences (colors, aesthetics, occasions, budget, body type)
+2. search_outfit_history(query, limit=5) - Search the user's wardrobe using vector similarity (finds relevant items they own)
+   - query: What to search for (e.g., "blazer", "casual shirt", "business outfit")
+   - limit: Number of results (default: 5)
+3. search_fashion_trends(query, limit=3) - Search current fashion trends (OPTIONAL - GPT-4 already knows trends)
 
 DECISION LOGIC - ALWAYS CHECK WARDROBE FOR OUTFIT RECOMMENDATIONS:
 
@@ -275,23 +323,28 @@ DECISION LOGIC - ALWAYS CHECK WARDROBE FOR OUTFIT RECOMMENDATIONS:
 EXAMPLES:
 
 Query: "What should I wear for a business meeting?"
-→ ✅ Use: get_user_preferences (for their style)
-→ ✅ Use: search_outfit_history (to find items they own)
+→ ✅ Use: get_user_preferences()
+→ ✅ Use: search_outfit_history(query="business meeting outfit", limit=5)
 → ❌ Skip: search_fashion_trends (not needed)
 
 Query: "I need outfit ideas for a date"
-→ ✅ Use: get_user_preferences (personalization)
-→ ✅ Use: search_outfit_history (check their wardrobe first!)
+→ ✅ Use: get_user_preferences()
+→ ✅ Use: search_outfit_history(query="date night outfit", limit=5)
 → ❌ Skip: search_fashion_trends (you know date fashion)
+
+Query: "I want to wear a blazer"
+→ ✅ Use: get_user_preferences()
+→ ✅ Use: search_outfit_history(query="blazer", limit=5)
+→ ❌ Skip: search_fashion_trends (not needed)
 
 Query: "What's trending in streetwear 2025?"
 → ❌ Skip: get_user_preferences (not personalized request)
 → ❌ Skip: search_outfit_history (not about outfits)
-→ ✅ Use: search_fashion_trends (explicitly about trends)
+→ ✅ Use: search_fashion_trends(query="streetwear 2025 trends")
 
 Query: "Help me look good for tomorrow"
-→ ✅ Use: get_user_preferences (personalization)
-→ ✅ Use: search_outfit_history (check what they have!)
+→ ✅ Use: get_user_preferences()
+→ ✅ Use: search_outfit_history(query="casual outfit", limit=5)
 → ❌ Skip: search_fashion_trends (not needed)
 
 RESPONSE STRUCTURE - Combine Wardrobe + Generic Suggestions:
@@ -406,6 +459,7 @@ def create_styling_agent() -> StateGraph:
 
 
 # Agent execution function
+@llm_agent(name="styling_langgraph_agent")
 async def run_styling_agent(
     user_id: str,
     query: str,
@@ -425,6 +479,9 @@ async def run_styling_agent(
         dict: The agent's recommendations and response
     """
 
+    # Set user_id in context for tools to access
+    _current_user_id.set(user_id)
+
     # Create the agent
     agent = create_styling_agent()
 
@@ -436,17 +493,17 @@ async def run_styling_agent(
         "weather_context": weather_context
     }
 
-    # Run the agent
-    print(f"\n{'='*50}")
-    print(f"Starting Autonomous Styling Agent for user: {user_id}")
-    print(f"Query: {query}")
-    print(f"{'='*50}\n")
+    # Run the agent (now automatically traced by @llm_agent decorator)
+    logger.info(f"\n{'='*50}")
+    logger.info(f"Starting Autonomous Styling Agent for user: {user_id}")
+    logger.info(f"Query: {query}")
+    logger.info(f"{'='*50}\n")
 
     final_state = await agent.ainvoke(initial_state)
 
-    print(f"\n{'='*50}")
-    print(f"Agent completed successfully")
-    print(f"{'='*50}\n")
+    logger.info(f"\n{'='*50}")
+    logger.info(f"Agent completed successfully")
+    logger.info(f"{'='*50}\n")
 
     # Extract final message content
     messages = final_state['messages']
@@ -455,11 +512,67 @@ async def run_styling_agent(
     # Parse recommendations from final message
     recommendations = []
     tools_used = []
+    wardrobe_images = []  # Store images from user's wardrobe
 
-    # Check which tools were used by looking at ToolMessages
+    # Check which tools were used and extract wardrobe images
     for msg in messages:
         if isinstance(msg, ToolMessage):
-            tools_used.append(msg.name if hasattr(msg, 'name') else 'unknown')
+            tool_name = msg.name if hasattr(msg, 'name') else 'unknown'
+            tools_used.append(tool_name)
+
+            # Extract wardrobe images from search_outfit_history tool
+            if tool_name == 'search_outfit_history':
+                try:
+                    # Parse tool result content
+                    tool_result = None
+
+                    if isinstance(msg.content, str):
+                        # Try JSON first, then fallback to ast.literal_eval
+                        try:
+                            tool_result = json.loads(msg.content)
+                        except json.JSONDecodeError:
+                            try:
+                                import ast
+                                tool_result = ast.literal_eval(msg.content)
+                            except (ValueError, SyntaxError):
+                                logger.warning(f"Could not parse tool content as JSON or literal: {msg.content[:100]}")
+                    elif isinstance(msg.content, (list, dict)):
+                        # Already parsed
+                        tool_result = msg.content
+                    else:
+                        logger.warning(f"Unexpected msg.content type: {type(msg.content)}")
+
+                    # Extract image data from results
+                    if isinstance(tool_result, list):
+                        logger.info(f"Processing {len(tool_result)} items from search_outfit_history")
+                        for idx, item in enumerate(tool_result):
+                            if isinstance(item, dict):
+                                logger.info(f"Item {idx}: {item.keys()}")
+                                # Get image URL (prefer gcs_url, fallback to local_path)
+                                gcs_url = item.get('gcs_url')
+                                local_path = item.get('metadata', {}).get('local_path')
+                                image_url = gcs_url or local_path
+
+                                # Ensure URL starts with / for proper web access
+                                if image_url and not image_url.startswith(('http://', 'https://', '/')):
+                                    image_url = '/' + image_url
+
+                                logger.info(f"Item {idx}: gcs_url={gcs_url}, local_path={local_path}, final_url={image_url}")
+
+                                if image_url:
+                                    wardrobe_images.append({
+                                        "image_id": item.get('image_id'),
+                                        "filename": item.get('filename'),
+                                        "url": image_url,
+                                        "similarity_score": round(item.get('similarity_score', 0), 3),
+                                        "metadata": item.get('metadata', {})
+                                    })
+                                else:
+                                    logger.warning(f"Item {idx} has no valid URL: {item}")
+
+                    logger.info(f"Extracted {len(wardrobe_images)} wardrobe images from search results")
+                except Exception as e:
+                    logger.error(f"Error extracting wardrobe images: {e}", exc_info=True)
 
     # Try to parse JSON from final AI message
     if final_message and hasattr(final_message, 'content'):
@@ -486,6 +599,7 @@ async def run_styling_agent(
         "user_id": final_state['user_id'],
         "query": final_state['query'],
         "recommendations": recommendations,
+        "wardrobe_images": wardrobe_images,  # Images from user's wardrobe
         "messages": [
             msg.content if hasattr(msg, 'content') else str(msg)
             for msg in messages

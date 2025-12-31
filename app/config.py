@@ -65,6 +65,20 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_ENABLED: bool = False
 
+    # Datadog LLM Observability
+    DD_API_KEY: str = "9275d0a6f9183325484fd6ae00521b14"
+    DD_SITE: str = "datadoghq.com"  # or datadoghq.eu for EU
+    DD_SERVICE: str = "stylistai-backend"
+    DD_ENV: str = "production"  # development, staging, or production
+    DD_VERSION: str = "1.0.0"
+    DD_LLMOBS_ENABLED: bool = True
+    DD_LLMOBS_ML_APP: str = "stylistai"
+    DD_TRACE_OPENAI_ENABLED: bool = True
+    DD_TRACE_ENABLED: bool = True
+    DD_LOGS_INJECTION: bool = True
+    DD_AGENT_HOST: str = "localhost"
+    DD_TRACE_AGENT_PORT: str = "8126"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

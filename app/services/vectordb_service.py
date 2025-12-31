@@ -146,11 +146,22 @@ class VectorDBService:
             outfits = []
             if results['ids'] and len(results['ids']) > 0:
                 for i, image_id in enumerate(results['ids'][0]):
+                    distance = results['distances'][0][i] if results['distances'] else 0
+
+                    # Convert distance to similarity score (0-1 range)
+                    # For L2 distance on high-dimensional CLIP embeddings (512-768 dims):
+                    # Distances can be very large (150-200+), so we need a larger scale factor
+                    # e^(-distance/100) gives reasonable percentages for these large distances
+                    import math
+                    similarity = math.exp(-distance / 100.0)
+
+                    logger.info(f"Image {i}: distance={distance:.4f}, similarity={similarity:.4f} ({similarity*100:.1f}%)")
+
                     outfits.append({
                         "image_id": image_id,
                         "metadata": results['metadatas'][0][i] if results['metadatas'] else {},
-                        "distance": results['distances'][0][i] if results['distances'] else 0,
-                        "similarity": 1 - (results['distances'][0][i] if results['distances'] else 0)
+                        "distance": distance,
+                        "similarity": similarity
                     })
 
             logger.info(f"Found {len(outfits)} similar outfits for user: {user_id}")

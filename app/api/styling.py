@@ -24,6 +24,7 @@ router = APIRouter(prefix="/styling", tags=["Styling"])
 
 # In-memory conversation storage (for POC - use Redis in production)
 _conversation_histories = {}
+_weather_cache = {}  # Cache weather info per user
 
 
 @router.post("/query")
@@ -85,14 +86,26 @@ async def get_styling_advice(
         logger.info(f"[Autonomous] Conversational agent used tools: {tools_used}")
         logger.info(f"[Autonomous] Needs more context: {needs_more_context}")
 
+        # Cache weather info if it was fetched in this request
+        if weather_info:
+            _weather_cache[user_id] = weather_info
+            logger.info(f"[Autonomous] Cached weather info for user {user_id}")
+
+        # Reuse cached weather if not fetched in this request
+        elif user_id in _weather_cache:
+            weather_info = _weather_cache[user_id]
+            logger.info(f"[Autonomous] Reusing cached weather info for user {user_id}")
+
         # Save to conversation history
         conversation_history.append({"role": "user", "content": request.query})
         conversation_history.append({"role": "assistant", "content": ai_response})
 
         recommendations = []
+        wardrobe_images = []  # Initialize wardrobe images list
 
         # STEP 2: PURE SEQUENTIAL PATTERN - Explicit Orchestration
-        # Check if conversational agent gathered complete context
+        # Check if conversational agent gathered complete context OR user explicitly wants wardrobe
+        # Use cached weather if available
         if not needs_more_context and weather_info:
             logger.info(f"[Autonomous] Step 2: Context complete, orchestrating LangGraph agent...")
 
@@ -109,6 +122,9 @@ async def get_styling_advice(
                 weather_context=weather_info
             )
 
+            # Extract wardrobe images from agent result
+            wardrobe_images = agent_result.get('wardrobe_images', [])
+
             # Format recommendations
             for rec in agent_result.get('recommendations', []):
                 recommendations.append({
@@ -120,12 +136,19 @@ async def get_styling_advice(
                     "confidence_score": rec.get('confidence', 0.85)
                 })
 
-            logger.info(f"[Autonomous] Generated {len(recommendations)} recommendations via sequential orchestration")
+            logger.info(f"[Autonomous] Generated {len(recommendations)} recommendations and {len(wardrobe_images)} wardrobe images via sequential orchestration")
+
+        # Log wardrobe images being returned
+        if wardrobe_images:
+            logger.info(f"[API Response] Returning {len(wardrobe_images)} wardrobe images:")
+            for idx, img in enumerate(wardrobe_images):
+                logger.info(f"  Image {idx}: url={img.get('url')}, filename={img.get('filename')}")
 
         # Return response
         return {
             "response": ai_response,
             "recommendations": recommendations,
+            "wardrobe_images": wardrobe_images,  # Images from user's wardrobe
             "is_conversational": needs_more_context,
             "context_complete": not needs_more_context,
             "weather_info": weather_info,
@@ -212,6 +235,7 @@ async def get_styling_advice_autonomous(
         conversation_history.append({"role": "assistant", "content": ai_response})
 
         recommendations = []
+        wardrobe_images = []  # Initialize wardrobe images list
 
         # STEP 2: PURE SEQUENTIAL PATTERN - Explicit Orchestration
         # Check if conversational agent gathered complete context (weather + readiness)
@@ -232,6 +256,9 @@ async def get_styling_advice_autonomous(
                 weather_context=weather_info
             )
 
+            # Extract wardrobe images from agent result
+            wardrobe_images = agent_result.get('wardrobe_images', [])
+
             # Format recommendations
             for rec in agent_result.get('recommendations', []):
                 recommendations.append({
@@ -243,12 +270,13 @@ async def get_styling_advice_autonomous(
                     "confidence_score": rec.get('confidence', 0.85)
                 })
 
-            logger.info(f"[Autonomous] Generated {len(recommendations)} recommendations via explicit sequential orchestration")
+            logger.info(f"[Autonomous] Generated {len(recommendations)} recommendations and {len(wardrobe_images)} wardrobe images via explicit sequential orchestration")
 
         # Format response
         return {
             "response": ai_response,
             "recommendations": recommendations,
+            "wardrobe_images": wardrobe_images,  # Images from user's wardrobe
             "is_conversational": needs_more_context,
             "context_complete": not needs_more_context,
             "weather_info": weather_info,

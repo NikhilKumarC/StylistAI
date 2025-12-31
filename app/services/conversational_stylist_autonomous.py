@@ -16,6 +16,22 @@ from app.services.weather_service import WeatherService
 
 logger = logging.getLogger(__name__)
 
+# Import Datadog LLM Observability decorators
+try:
+    from ddtrace.llmobs.decorators import agent as llm_agent, tool as llm_tool
+    DATADOG_AVAILABLE = True
+except ImportError:
+    DATADOG_AVAILABLE = False
+    # Create no-op decorators if ddtrace not available
+    def llm_agent(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+    def llm_tool(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
 
 # Define conversation state
 class ConversationState(TypedDict):
@@ -202,15 +218,15 @@ You: "Perfect! Tomorrow evening in Seattle will be 65°F and partly cloudy.
 User: "Nice dinner"
 
 You: [Has complete context: date + tomorrow evening + Seattle + weather + nice dinner]
-[Uses readiness phrase that API will detect]
+[⚠️ CRITICAL: MUST use readiness phrase now!]
 
 You: "Perfect! Let me find you the ideal outfit for your nice dinner date tomorrow evening! 💫"
 
 [API detects THREE signals:]
 [✅ has_weather = True]
-[✅ agent_signals_ready = True ("let me find" detected)]
+[✅ agent_signals_ready = True ("let me find" detected in response)]
 [✅ min_conversation_depth = True (multiple exchanges)]
-[→ Context complete! API calls LangGraph agent]
+[→ Context complete! API calls LangGraph agent to search wardrobe & generate recommendations]
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -281,13 +297,17 @@ You: "Hey! Great question! 🌟 Right now, we're seeing a lot of:
 ❌ Don't call multiple times (cache the weather data)
 
 **Indicating Readiness for Recommendations:**
-✅ When you have: occasion + formality + weather + location + when
-✅ Use SPECIFIC readiness phrases (API detects these):
+⚠️ CRITICAL: When you have gathered enough context (occasion + formality + weather + location + when):
+✅ You MUST use ONE of these EXACT readiness phrases in your response:
    - "Let me find you the perfect outfit!"
    - "Perfect! Let me get some great options for you!"
    - "Great! Let me put together some recommendations!"
-   - "I've got all the details I need!"
+   - "I've got all the details I need! Let me find something perfect!"
    - "I'll find you some amazing outfits!"
+   - "Let me find the ideal outfit for you!"
+
+⚠️ MANDATORY: You MUST include "let me find" or "let me put together" or "i'll find" in your final response when context is complete!
+
 ✅ Be enthusiastic and signal you're ready to help
 ✅ API detects these phrases + weather data + conversation depth
 ❌ Never say "I'll call the recommendations tool" (internal API logic)
@@ -387,6 +407,7 @@ def create_conversational_stylist_agent() -> StateGraph:
 
 
 # Main execution function
+@llm_agent(name="conversational_stylist")
 async def chat_with_stylist(
     user_id: str,
     user_message: str,
@@ -432,7 +453,7 @@ async def chat_with_stylist(
     logger.info(f"Message: {user_message}")
     logger.info(f"{'='*50}\n")
 
-    # Run agent
+    # Run agent (now automatically traced by @llm_agent decorator)
     final_state = await agent.ainvoke(initial_state)
 
     # Extract response
@@ -477,7 +498,21 @@ async def chat_with_stylist(
     # Signal 1: Weather has been fetched
     has_weather = weather_info is not None
 
-    # Signal 2: Agent indicates readiness through response language
+    # Signal 2: User explicitly asks for wardrobe images/search
+    user_msg_lower = user_message.lower()
+    wardrobe_keywords = [
+        "wardrobe",
+        "my clothes",
+        "my items",
+        "show me",
+        "from my closet",
+        "what i own",
+        "pics from wardrobe",
+        "images from wardrobe"
+    ]
+    user_wants_wardrobe = any(keyword in user_msg_lower for keyword in wardrobe_keywords)
+
+    # Signal 3: Agent indicates readiness through response language
     # Look for phrases that indicate agent is ready to find outfits
     readiness_phrases = [
         "let me find",
@@ -490,24 +525,27 @@ async def chat_with_stylist(
         "i can help you with that",
         "here's what i suggest",
         "let me put together",
-        "i'll put together"
+        "i'll put together",
+        "recommendations",
+        "recommend",
+        "suggest"
     ]
     agent_signals_ready = any(
         phrase in ai_response.lower()
         for phrase in readiness_phrases
     ) if ai_response else False
 
-    # Signal 3: Minimum conversation depth (at least 1-2 exchanges)
+    # Signal 4: Minimum conversation depth (at least 3-4 exchanges)
     # Prevents weather-only queries from triggering recommendations
-    min_conversation_depth = len(conversation_history) >= 2  # At least 1 user msg + 1 assistant msg before this
+    min_conversation_depth = len(conversation_history) >= 4  # At least 2 user msgs + 2 assistant msgs
 
     # Context is complete when:
-    # 1. Weather fetched (indicates location + when)
-    # 2. Agent signals readiness in response
-    # 3. Had at least minimal conversation (not just "what's the weather?")
-    needs_more_context = not (has_weather and agent_signals_ready and min_conversation_depth)
+    # 1. Weather fetched + conversation depth (normal flow)
+    # 2. User explicitly asks for wardrobe AND we have weather context
+    # Note: Even if user asks for wardrobe, we still need weather for good recommendations
+    needs_more_context = not ((has_weather and min_conversation_depth) or (user_wants_wardrobe and has_weather))
 
-    logger.info(f"[Context Detection] has_weather={has_weather}, agent_ready={agent_signals_ready}, min_depth={min_conversation_depth}")
+    logger.info(f"[Context Detection] has_weather={has_weather}, agent_ready={agent_signals_ready}, min_depth={min_conversation_depth}, user_wants_wardrobe={user_wants_wardrobe}")
     logger.info(f"[Context Detection] needs_more_context={needs_more_context}")
 
     # PURE SEQUENTIAL: No recommendations here!
@@ -522,7 +560,8 @@ async def chat_with_stylist(
         "context_signals": {  # Debug info for UI/logging
             "has_weather": has_weather,
             "agent_signals_ready": agent_signals_ready,
-            "min_conversation_depth": min_conversation_depth
+            "min_conversation_depth": min_conversation_depth,
+            "user_wants_wardrobe": user_wants_wardrobe
         }
     }
 

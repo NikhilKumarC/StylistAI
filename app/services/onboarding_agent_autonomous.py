@@ -16,6 +16,18 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Import Datadog LLM Observability decorators
+try:
+    from ddtrace.llmobs.decorators import agent as llm_agent
+    DATADOG_AVAILABLE = True
+except ImportError:
+    DATADOG_AVAILABLE = False
+    # Create no-op decorator if ddtrace not available
+    def llm_agent(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
 
 # Define the onboarding state
 class OnboardingState(TypedDict):
@@ -357,6 +369,7 @@ def create_autonomous_onboarding_agent() -> StateGraph:
 
 
 # Main execution function
+@llm_agent(name="onboarding_agent")
 async def run_autonomous_onboarding(
     user_id: str,
     user_message: Optional[str] = None,
@@ -364,6 +377,12 @@ async def run_autonomous_onboarding(
 ) -> dict:
     """
     Run the autonomous onboarding agent
+
+    Automatically tracked by Datadog LLM Observability:
+    - Token usage (prompt + completion)
+    - Cost estimation
+    - Agent decision flow
+    - Tool calls
 
     Args:
         user_id: User's ID
@@ -400,7 +419,7 @@ async def run_autonomous_onboarding(
     logger.info(f"Autonomous Onboarding Agent - User: {user_id}")
     logger.info(f"{'='*50}\n")
 
-    # Run agent
+    # Run agent (automatically tracked by @llm_agent decorator)
     final_state = await agent.ainvoke(initial_state)
 
     # Extract response

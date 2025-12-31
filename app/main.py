@@ -12,6 +12,7 @@ import os
 
 from app.config import settings
 from app.core.security import initialize_firebase
+from app.core.datadog import init_datadog, shutdown_datadog
 from app.api import auth, styling, onboarding
 
 # Configure logging
@@ -46,6 +47,17 @@ async def startup_event():
     """Initialize services on application startup"""
     logger.info("Starting StylistAI API...")
 
+    # Initialize Datadog LLM Observability (first, to capture everything)
+    try:
+        datadog_enabled = init_datadog(settings)
+        if datadog_enabled:
+            logger.info("✅ Datadog LLM Observability initialized")
+        else:
+            logger.info("ℹ️ Datadog LLM Observability not enabled (DD_API_KEY not set)")
+    except Exception as e:
+        logger.error(f"Failed to initialize Datadog: {e}")
+        logger.warning("API will start but monitoring will not work")
+
     # Initialize Firebase
     try:
         initialize_firebase()
@@ -69,6 +81,13 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on application shutdown"""
     logger.info("Shutting down StylistAI API...")
+
+    # Shutdown Datadog
+    try:
+        shutdown_datadog()
+        logger.info("Datadog monitoring shut down")
+    except Exception as e:
+        logger.error(f"Error shutting down Datadog: {e}")
 
 
 @app.get("/api")

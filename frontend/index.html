@@ -1190,9 +1190,38 @@
                 if (data.response) {
                     formattedResponse = data.response;
 
+                    // If there are wardrobe images, add them
+                    if (data.wardrobe_images && data.wardrobe_images.length > 0) {
+                        formattedResponse += `\n\n**From your wardrobe (${data.wardrobe_images.length} matches):**\n\n`;
+
+                        // We'll add images as HTML after adding the message
+                        addMainChatAIMessage(formattedResponse);
+
+                        // Create a div with wardrobe images
+                        const messagesDiv = document.getElementById('mainChatMessages');
+                        const imagesDiv = document.createElement('div');
+                        imagesDiv.className = 'message ai';
+                        imagesDiv.innerHTML = `
+                            <div class="image-preview">
+                                ${data.wardrobe_images.map(img => `
+                                    <div class="preview-item">
+                                        <img src="${img.url}" alt="${img.filename}" title="Similarity: ${(img.similarity_score * 100).toFixed(0)}%">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                        messagesDiv.appendChild(imagesDiv);
+                        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+                        // Reset formattedResponse so we don't add it again
+                        formattedResponse = '';
+                    }
+
                     // If there are also recommendations, add them
                     if (data.recommendations && data.recommendations.length > 0) {
-                        formattedResponse += `\n\n**Here are specific outfit ideas:**\n\n`;
+                        if (formattedResponse) {
+                            formattedResponse += `\n\n**Here are specific outfit ideas:**\n\n`;
+                        }
 
                         data.recommendations.forEach((rec, index) => {
                             formattedResponse += `**${index + 1}. ${rec.title}**\n`;
@@ -1229,7 +1258,10 @@
                     formattedResponse = 'I have received your query and analyzed your preferences. Let me know if you need more specific recommendations!';
                 }
 
-                addMainChatAIMessage(formattedResponse);
+                // Only add message if there's content (might be empty if wardrobe images were already added)
+                if (formattedResponse) {
+                    addMainChatAIMessage(formattedResponse);
+                }
             } catch (error) {
                 console.error('Error:', error);
                 // Remove loading message
