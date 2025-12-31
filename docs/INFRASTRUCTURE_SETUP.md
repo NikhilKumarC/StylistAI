@@ -556,7 +556,7 @@ PORT=8000
 # Firebase Auth
 FIREBASE_CREDENTIALS_PATH=./firebase-service-account.json
 FIREBASE_PROJECT_ID=stylistai
-FIREBASE_WEB_API_KEY=AIzaSyD3MNmvWbokkuB180gkGrxxQReZx_8_uHc
+FIREBASE_WEB_API_KEY=your-firebase-web-api-key-here
 
 # PostgreSQL Database
 DATABASE_URL=postgresql://stylistai_user:stylistai_password@localhost:5432/stylistai

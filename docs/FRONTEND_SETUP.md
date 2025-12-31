@@ -49,7 +49,7 @@ Make sure your `.env` file has these values:
 # Firebase Authentication
 FIREBASE_CREDENTIALS_PATH=./firebase-service-account.json
 FIREBASE_PROJECT_ID=stylistai  # Your Firebase project ID
-FIREBASE_WEB_API_KEY=AIzaSyD3MNmvWbokkuB180gkGrxxQReZx_8_uHc  # Your web API key
+FIREBASE_WEB_API_KEY=your-firebase-web-api-key-here  # Your web API key
 
 # OpenAI (Required for LangGraph agent)
 OPENAI_API_KEY=sk-proj-...your-actual-key...

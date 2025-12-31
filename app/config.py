@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     REDIS_ENABLED: bool = False
 
     # Datadog LLM Observability
-    DD_API_KEY: str = "9275d0a6f9183325484fd6ae00521b14"
+    DD_API_KEY: str = ""  # Load from environment variable
     DD_SITE: str = "datadoghq.com"  # or datadoghq.eu for EU
     DD_SERVICE: str = "stylistai-backend"
     DD_ENV: str = "production"  # development, staging, or production

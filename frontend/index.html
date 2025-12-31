@@ -774,15 +774,28 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 
     <script>
-        // Firebase Configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyD3MNmvWbokkuB180gkGrxxQReZx_8_uHc",
-            authDomain: "stylistai-db968.firebaseapp.com",
-            projectId: "stylistai-db968"
-        };
+        // Firebase Configuration - Load from backend config endpoint
+        let auth = null;
 
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
+        // Fetch configuration from backend and initialize Firebase
+        async function initializeApp() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+
+                firebase.initializeApp(config.firebase);
+                auth = firebase.auth();
+
+                // Start auth state listener after Firebase is initialized
+                setupAuthListener();
+            } catch (error) {
+                console.error('Failed to load configuration:', error);
+                alert('Failed to initialize app. Please check your connection.');
+            }
+        }
+
+        // Initialize app immediately
+        initializeApp();
 
         // State
         let currentUser = null;
@@ -791,8 +804,9 @@
         let uploadedFiles = [];
         let onboardingInProgress = false;
 
-        // Check auth state on page load
-        auth.onAuthStateChanged(async (user) => {
+        // Setup auth state listener
+        function setupAuthListener() {
+            auth.onAuthStateChanged(async (user) => {
             if (user) {
                 currentUser = user;
                 authToken = await user.getIdToken();
@@ -809,7 +823,8 @@
             } else {
                 showAuthScreen();
             }
-        });
+            });
+        }
 
         // Auth functions
         function switchTab(mode) {

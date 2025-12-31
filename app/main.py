@@ -110,6 +110,22 @@ async def health_check():
     }
 
 
+@app.get("/api/config")
+async def get_config():
+    """
+    Public configuration endpoint for frontend
+    Returns non-sensitive configuration like Firebase Web API Key
+    Note: Firebase Web API Key is safe to expose publicly (it's client-side)
+    """
+    return {
+        "firebase": {
+            "apiKey": settings.FIREBASE_WEB_API_KEY,
+            "authDomain": f"{settings.FIREBASE_PROJECT_ID}.firebaseapp.com",
+            "projectId": settings.FIREBASE_PROJECT_ID,
+        }
+    }
+
+
 # Exception handlers
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
